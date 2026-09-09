@@ -8,10 +8,20 @@ This branch only holds the mirror configuration and its tooling. See the mirror 
 
 | Branch | Contents |
 | --- | --- |
-| `awf-latest` | `autowarefoundation/autoware_universe:main`, planning paths |
-| `awf-core-latest` | `autowarefoundation/autoware_core:main`, planning paths |
+| `awf-latest/universe` | `autowarefoundation/autoware_universe:main`, planning paths |
+| `awf-latest/core` | `autowarefoundation/autoware_core:main`, planning paths |
 | `feat/v0.64/e2e` | `tier4/autoware_universe:feat/v0.64/e2e`, planning paths |
-| `awf-latest-combined` | `awf-latest` and `awf-core-latest` replayed into one linear history |
+| `awf-combined-latest` | `awf-latest/universe` and `awf-latest/core` replayed into one linear history |
+
+In the combined branch each member is filed under the name of its upstream,
+`universe/` and `core/`, because both ship a `planning/` tree. Everything else
+at the root comes from `autoware_universe`.
+
+The upstream mirrors live under the `awf-latest/` namespace; the combined
+branch is derived from them rather than from an upstream, so it sits outside
+it. Note that git cannot hold a branch named `awf-latest` at the same time as
+`awf-latest/*`, so the old flat branch has to be deleted before these can be
+created.
 
 ### How it works
 
@@ -51,7 +61,7 @@ This is checked rather than assumed:
 - Every push reports whether the previously published tip is still an ancestor
   of the new one. A fast-forward means the contract held; anything else is
   reported as a rewrite.
-- `awf-latest` is pushed without `--force` on purpose, so losing reproducibility
+- `awf-latest/universe` is pushed without `--force` on purpose, so losing reproducibility
   there fails the job instead of silently republishing the branch.
 
 ### Working on the configuration
@@ -61,7 +71,7 @@ python3 -m pip install pyyaml git-filter-repo==2.47.0
 
 tools/sync_config.py validate              # check the configuration
 tools/sync_config.py show autoware_core    # the git-filter-repo call it implies
-tools/mirror.py combine awf-latest-combined \
+tools/mirror.py combine awf-combined-latest \
     --work /tmp/mirror --downstream https://github.com/OWNER/REPO.git --verify
 ```
 

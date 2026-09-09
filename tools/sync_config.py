@@ -169,6 +169,23 @@ def _parse_combined(name: str, raw: dict[str, Any], sources: dict[str, Source]) 
     )
 
 
+def _check_ref_hierarchy(branches: dict[str, str]) -> None:
+    """Reject branch names that cannot coexist as git refs.
+
+    refs/heads/a is a file and refs/heads/a/b needs refs/heads/a to be a
+    directory, so git refuses to create the second while the first exists.
+    Catching it here turns a mid-run push failure into a configuration error.
+    """
+    for name, owner in sorted(branches.items()):
+        for other, other_owner in sorted(branches.items()):
+            if other.startswith(name + "/"):
+                raise ConfigError(
+                    f"{owner}: branch {name!r} cannot coexist with {other!r} "
+                    f"from {other_owner}; a ref cannot be both a branch and a "
+                    "namespace holding other branches"
+                )
+
+
 def load(path: str = DEFAULT_CONFIG) -> Config:
     with open(path, "rb") as handle:
         raw = yaml.safe_load(handle)
@@ -197,6 +214,8 @@ def load(path: str = DEFAULT_CONFIG) -> Config:
     for name in combined:
         if name in branches:
             raise ConfigError(f"combined.{name}: collides with a mirror_branch")
+        branches[name] = f"combined.{name}"
+    _check_ref_hierarchy(branches)
     return Config(sources=sources, combined=combined)
 
 

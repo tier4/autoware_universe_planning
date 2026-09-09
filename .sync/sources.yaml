@@ -25,7 +25,7 @@ sources:
   autoware_universe:
     upstream: https://github.com/autowarefoundation/autoware_universe.git
     ref: main
-    mirror_branch: awf-latest
+    mirror_branch: awf-latest/universe
     # Kept non-forced on purpose: a failed push is the alarm that tells us the
     # filtered history stopped being reproducible.
     force: false
@@ -41,7 +41,7 @@ sources:
   autoware_core:
     upstream: https://github.com/autowarefoundation/autoware_core.git
     ref: main
-    mirror_branch: awf-core-latest
+    mirror_branch: awf-latest/core
     force: true
     paths:
       - path: planning/
@@ -74,16 +74,19 @@ sources:
         replacement: This reverts commit 871a8540ade845c7c9a193029d407b411a4d685b.
 
 combined:
-  awf-latest-combined:
+  awf-combined-latest:
     # Members are replayed into one linear history ordered by committer date.
     # Ties break on member order then original commit id, so the ordering is
     # total and stable.
     order_by: committer_date
     force: true
+    # Both members ship planning/, so each is filed under the name of its
+    # upstream. That keeps them disjoint and mirrors the awf-latest/universe
+    # and awf-latest/core branch names.
     members:
       - source: autoware_universe
-      - source: autoware_core
-        # autoware_core also ships planning/; rename it so the two members
-        # occupy disjoint paths.
         rename:
-          planning: core_planning
+          planning: universe
+      - source: autoware_core
+        rename:
+          planning: core

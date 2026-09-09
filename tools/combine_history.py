@@ -170,8 +170,18 @@ def _top_level_state(
     rendered = []
     for commit in commits:
         lines = []
+        taken: set[bytes] = set()
         for mode, name, oid in _parse_tree_object(trees[commit.tree]):
-            lines.append(b"M " + mode + b" " + oid + b" " + _quote_path(mapping.get(name, name)))
+            target = mapping.get(name, name)
+            if target in taken:
+                # Two entries landing on one name would silently drop whichever
+                # was written first, so refuse instead.
+                raise CombineError(
+                    f"rename maps more than one top-level path onto "
+                    f"{target.decode(errors='replace')!r} in {commit.oid.decode()}"
+                )
+            taken.add(target)
+            lines.append(b"M " + mode + b" " + oid + b" " + _quote_path(target))
         rendered.append(lines)
     return rendered
 

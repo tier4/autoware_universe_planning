@@ -143,6 +143,15 @@ def do_mirror(config: sync_config.Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def _remote_has_branch(downstream: str, branch: str) -> bool:
+    result = subprocess.run(
+        ["git", "ls-remote", "--exit-code", "--heads", downstream, f"refs/heads/{branch}"],
+        check=False,
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
 def _build_combined(config: sync_config.Config, name: str, repo: str, downstream: str) -> str:
     target = config.combined[name]
     members = [
@@ -163,6 +172,20 @@ def do_combine(config: sync_config.Config, args: argparse.Namespace) -> int:
         raise ConfigError(f"unknown combined target {args.target!r}")
     if not args.downstream:
         raise RuntimeError("combine needs --downstream to read the mirror branches")
+
+    missing = [
+        config.sources[member.source].mirror_branch
+        for member in config.combined[args.target].members
+        if not _remote_has_branch(
+            args.downstream, config.sources[member.source].mirror_branch or ""
+        )
+    ]
+    if missing:
+        message = f"{args.target}: member branch(es) not published yet: {', '.join(missing)}"
+        if not args.allow_missing_members:
+            raise RuntimeError(message)
+        print(f"{message}; skipping")
+        return 0
 
     work = _fresh_dir(os.path.join(args.work, args.target))
     repo = os.path.join(work, "combined")
@@ -215,6 +238,11 @@ def main() -> int:
     combine.add_argument("--downstream")
     combine.add_argument("--push", action="store_true")
     combine.add_argument("--verify", action="store_true")
+    combine.add_argument(
+        "--allow-missing-members",
+        action="store_true",
+        help="skip the target instead of failing when a member branch is not published yet",
+    )
 
     args = parser.parse_args()
     config = sync_config.load(args.config)

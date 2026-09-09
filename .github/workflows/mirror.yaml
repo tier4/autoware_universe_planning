@@ -3,11 +3,21 @@ name: mirror
 on:
   schedule:
     - cron: 0,30 * * * *
+  pull_request:
+    paths:
+      - .sync/sources.yaml
+      - tools/**
+      - .github/workflows/mirror.yaml
   workflow_call:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build the branches but do not push them
+        type: boolean
+        default: false
 
 concurrency:
-  group: mirror
+  group: mirror-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
@@ -15,6 +25,9 @@ env:
   # different version may rewrite differently and would republish every branch.
   FILTER_REPO_VERSION: 2.47.0
   DOWNSTREAM: https://github.com/${{ github.repository }}.git
+  # A pull request builds everything and pushes nothing, so the pipeline can be
+  # exercised before it is merged.
+  DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.dry_run == true }}
 
 jobs:
   plan:
@@ -59,25 +72,35 @@ jobs:
 
       - name: Generate token
         id: generate-token
+        if: env.DRY_RUN != 'true'
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY }}
 
       - name: Set git config
+        if: env.DRY_RUN != 'true'
         uses: autowarefoundation/autoware-github-actions/set-git-config@v1
         with:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Filter and publish the mirror branch
         run: |
-          tools/mirror.py mirror "${{ matrix.source }}" \
-            --work "${RUNNER_TEMP}/mirror" --downstream "${DOWNSTREAM}" --push
+          if [ "${DRY_RUN}" = true ]; then
+              tools/mirror.py mirror "${SOURCE}" --work "${RUNNER_TEMP}/mirror" \
+                  --downstream "${DOWNSTREAM}"
+          else
+              tools/mirror.py mirror "${SOURCE}" --work "${RUNNER_TEMP}/mirror" \
+                  --downstream "${DOWNSTREAM}" --push
+          fi
+        env:
+          SOURCE: ${{ matrix.source }}
         shell: bash
 
   combine:
     # Reads the mirror branches that the previous job published, so the
-    # combined branch can never disagree with the per-source mirrors.
+    # combined branch can never disagree with the per-source mirrors. On a dry
+    # run those branches may not exist yet, in which case the target is skipped.
     needs: [plan, mirror]
     runs-on: ubuntu-24.04
     strategy:
@@ -94,12 +117,14 @@ jobs:
 
       - name: Generate token
         id: generate-token
+        if: env.DRY_RUN != 'true'
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.PRIVATE_KEY }}
 
       - name: Set git config
+        if: env.DRY_RUN != 'true'
         uses: autowarefoundation/autoware-github-actions/set-git-config@v1
         with:
           token: ${{ steps.generate-token.outputs.token }}
@@ -108,6 +133,13 @@ jobs:
         # --verify rebuilds from scratch a second time and fails unless both
         # builds produce the same commit id.
         run: |
-          tools/mirror.py combine "${{ matrix.target }}" \
-            --work "${RUNNER_TEMP}/combine" --downstream "${DOWNSTREAM}" --verify --push
+          if [ "${DRY_RUN}" = true ]; then
+              tools/mirror.py combine "${TARGET}" --work "${RUNNER_TEMP}/combine" \
+                  --downstream "${DOWNSTREAM}" --verify --allow-missing-members
+          else
+              tools/mirror.py combine "${TARGET}" --work "${RUNNER_TEMP}/combine" \
+                  --downstream "${DOWNSTREAM}" --verify --push
+          fi
+        env:
+          TARGET: ${{ matrix.target }}
         shell: bash

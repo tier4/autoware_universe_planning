@@ -49,6 +49,19 @@ sources:
       - pattern: '#(\d+)'
         replacement: autowarefoundation/autoware_core#\1
 
+  autoware_launch:
+    upstream: https://github.com/autowarefoundation/autoware_launch.git
+    ref: main
+    mirror_branch: awf-latest/launch
+    force: true
+    paths:
+      # autoware_planning_config and autoware_planning_launch. The upstream
+      # layout is kept here; the combined branch is where it is filed away.
+      - regex: ^autoware_universe_launch/autoware_planning_[^/]+(/.*)?$
+    message_rules:
+      - pattern: '#(\d+)'
+        replacement: autowarefoundation/autoware_launch#\1
+
   tier4_universe_e2e:
     upstream: https://github.com/tier4/autoware_universe.git
     ref: feat/v0.64/e2e
@@ -90,3 +103,6 @@ combined:
       - source: autoware_core
         rename:
           planning: core
+      - source: autoware_launch
+        rename:
+          autoware_universe_launch: launch
